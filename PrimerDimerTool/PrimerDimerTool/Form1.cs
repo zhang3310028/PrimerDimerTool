@@ -13,6 +13,7 @@ using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.IO;
 using System.Xml;
+using System.Threading;
 
 namespace PrimerDimerTool
 {
@@ -45,8 +46,6 @@ namespace PrimerDimerTool
             dt = read_primer_sequence(inputFileName);
             textBox1.Text = inputFileName;
             textBox1.Update();
-
-            //TODO 做成R的primer格式
         }
         private DataTable read_primer_sequence(string filename)
         {
@@ -135,19 +134,30 @@ namespace PrimerDimerTool
             engine.SetSymbol("primer",primer);
             engine.SetSymbol("primer3dir", engine.CreateCharacter(primer3path));
             engine.SetSymbol("outputfile", engine.CreateCharacter(textBox2.Text));
-            //engine.Evaluate("check_dimer(primer,outputfile)");
-            engine.Evaluate("prepare_bat(tmp_dir,primer,primer3dir)");
-            Execute(tmp_path+ "/batch_run.bat");
+            string[] bat_cmds = engine.Evaluate("prepare_bat(tmp_dir,primer,primer3dir)").AsCharacter().ToArray();
+
+            AutoResetEvent[] resets = new AutoResetEvent[bat_cmds.Length];
+
+            for (int i = 0; i < bat_cmds.Length; i++)
+            {
+                resets[i] = new AutoResetEvent(false);
+                ThreadTransfer transfer = new ThreadTransfer(bat_cmds[i],resets[i]);
+                Thread thread = new Thread(new ParameterizedThreadStart(run_cmd));
+                thread.Start(transfer);
+            }
+            foreach (var v in resets)
+            {
+                v.WaitOne();
+            }
             engine.Evaluate("output_result(tmp_dir,primer,outputfile)");
             if (isDeleteTempDir == "true")
             {
                 DirectoryInfo di = new DirectoryInfo(tmp_path);
                 di.Delete(true);
             }
-            
-            //TODO engine资源回收
+            MessageBox.Show(this,"complete!");
         }
-        public string Execute(string dosCommand)
+        public static string Execute(string dosCommand)
         {
             return Execute(dosCommand, 10);
         }
@@ -191,7 +201,7 @@ namespace PrimerDimerTool
             }
             return output;
         }
-        public string getConfigSetting(string strKey) { 
+        public string getConfigSetting(string strKey) {
             XmlNodeList nodes = configDoc.GetElementsByTagName("add");
             string value=null;
             for(int i = 0 ; i < nodes.Count;i++){
@@ -204,6 +214,22 @@ namespace PrimerDimerTool
                 }
             }
             return value;
+        }
+        static void run_cmd(object obj)
+        {
+            ThreadTransfer transfer = (ThreadTransfer)obj;
+            Execute(transfer.cmd);
+            transfer.evt.Set();
+        }
+    }
+    public class ThreadTransfer
+    {
+        public string cmd;
+        public AutoResetEvent evt;
+        public ThreadTransfer(string cmd , AutoResetEvent evt)
+        {
+            this.cmd = cmd;
+            this.evt = evt;
         }
     }
 }

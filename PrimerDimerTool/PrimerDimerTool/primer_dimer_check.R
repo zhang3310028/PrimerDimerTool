@@ -150,9 +150,10 @@ prepare_bat<-function(tmp_dir,primer,primer3dir){
 	},cmd1,name1,1:length(cmd1),SIMPLIFY=F)
 
 	xx<-sapply(1:n,function(x){
-		paste("call ",tmp_dir,"/heterodimer_cmd_part_",x,".bat",sep="")
+		paste(tmp_dir,"/heterodimer_cmd_part_",x,".bat",sep="")
 	})
 	writeLines(xx,paste(tmp_dir,"/batch_run.bat",sep=""))
+	xx
 }
 
 output_result<-function(tmp_dir,primer,outputfile){
