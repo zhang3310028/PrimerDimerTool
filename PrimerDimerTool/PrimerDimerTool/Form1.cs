@@ -31,7 +31,8 @@ namespace PrimerDimerTool
             saveFileDialog1.InitialDirectory = "c:\\";
             saveFileDialog1.FileName = "dimer_result.xlsx";
             saveFileDialog1.Filter = "Excel文件(*.xlsx)|*.xlsx|所有文件(*.*)|*.*";
-            configDoc.Load(strFileName);  
+            configDoc.Load(strFileName);
+            progressBar1.Visible = false;
         }
         [DllImport(@"C:\Windows\System32\User32.dll", CharSet = CharSet.Auto)]
         public static extern int GetWindowThreadProcessId(IntPtr hwnd, out int ID);
@@ -104,22 +105,37 @@ namespace PrimerDimerTool
 
         private void button3_Click(object sender, EventArgs e)
         {
+            progressBar1.Value = 0;
+            progressBar1.Visible=true;
             string cwd = System.Environment.CurrentDirectory;
             string tmp_path = System.IO.Path.GetRandomFileName();
 
             tmp_path = cwd +"\\"+ tmp_path;
-            if (Directory.Exists(tmp_path) || File.Exists(tmp_path))
+            if (Directory.Exists(tmp_path))
+            {
+                DirectoryInfo di = new DirectoryInfo(tmp_path);
+                di.Delete(true);
+            }else if(File.Exists(tmp_path)){
+                return;
+            }
+            if (textBox2.Text == "")
             {
                 return;
             }
             Directory.CreateDirectory(tmp_path);
             string primer3path = getConfigSetting("primer3dir");
             string isDeleteTempDir = getConfigSetting("deleteTempDir");
+            string nProcess = getConfigSetting("processNum");
 
             string[,] primerMat = new string[dt.Rows.Count,3];
+            label3.Text = "preparing ...";
+            label3.Update();
             engine.Evaluate("library(Biostrings)");
+            progressBar1.Value = 5;
             engine.Evaluate("library(xlsx)");
+            progressBar1.Value = 8;
             engine.Evaluate("source(\"primer_dimer_check.R\")");
+            progressBar1.Value = 10;
             for (int i = 0; i < dt.Rows.Count; i++)
             {
                 string seqID = dt.Rows[i]["seqID"].ToString();
@@ -133,9 +149,16 @@ namespace PrimerDimerTool
             engine.SetSymbol("tmp_dir", engine.CreateCharacter(tmp_path));
             engine.SetSymbol("primer",primer);
             engine.SetSymbol("primer3dir", engine.CreateCharacter(primer3path));
+            if (nProcess != null) {
+                engine.SetSymbol("nprocess", engine.CreateInteger(Convert.ToInt32(nProcess)));
+            }else{
+                engine.SetSymbol("nprocess", engine.CreateInteger(4));
+            }
             engine.SetSymbol("outputfile", engine.CreateCharacter(textBox2.Text));
-            string[] bat_cmds = engine.Evaluate("prepare_bat(tmp_dir,primer,primer3dir)").AsCharacter().ToArray();
-
+            string[] bat_cmds = engine.Evaluate("prepare_bat(tmp_dir,primer,primer3dir,nprocess)").AsCharacter().ToArray();
+            label3.Text = "dimer calculating ...";
+            label3.Update();
+            progressBar1.Value = 20;
             AutoResetEvent[] resets = new AutoResetEvent[bat_cmds.Length];
 
             for (int i = 0; i < bat_cmds.Length; i++)
@@ -148,13 +171,20 @@ namespace PrimerDimerTool
             foreach (var v in resets)
             {
                 v.WaitOne();
+                progressBar1.Value += 60 / resets.Length;
             }
+            label3.Text = "result generating ...";
+            label3.Update();
+            progressBar1.Value = 80;
             engine.Evaluate("output_result(tmp_dir,primer,outputfile)");
-            if (isDeleteTempDir == "true")
+            if ("true" == isDeleteTempDir)
             {
                 DirectoryInfo di = new DirectoryInfo(tmp_path);
                 di.Delete(true);
             }
+            progressBar1.Value = 100;
+            label3.Text = "";
+            progressBar1.Visible = false;
             MessageBox.Show(this,"complete!");
         }
         public static string Execute(string dosCommand)
@@ -220,6 +250,11 @@ namespace PrimerDimerTool
             ThreadTransfer transfer = (ThreadTransfer)obj;
             Execute(transfer.cmd);
             transfer.evt.Set();
+        }
+
+        private void textBox1_MouseClick(object sender, MouseEventArgs e)
+        {
+            button1_Click(sender, e);
         }
     }
     public class ThreadTransfer
