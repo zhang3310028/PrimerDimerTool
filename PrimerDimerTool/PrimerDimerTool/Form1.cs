@@ -19,9 +19,10 @@ namespace PrimerDimerTool
 {
     public partial class Form1 : Form
     {
-        protected REngine engine = REngine.GetInstance();
+        protected REngine engine = null;
         private string inputFileName;
         private string outputFileName;
+        string installPath = null;
         private XmlDocument configDoc = new XmlDocument();  
         DataTable dt;
         public Form1()
@@ -33,6 +34,22 @@ namespace PrimerDimerTool
             saveFileDialog1.Filter = "Excel文件(*.xlsx)|*.xlsx|所有文件(*.*)|*.*";
             configDoc.Load(strFileName);
             progressBar1.Visible = false;
+
+            string installHome = Environment.GetEnvironmentVariable("PRIMERDIMERTOOL_HOME");
+            if (installHome != null)
+            {
+                installPath = installHome;
+            }
+            else
+            {
+                installPath = getConfigSetting("installpath");
+            }
+
+
+            Environment.SetEnvironmentVariable("PATH", installPath + "/Primer3/");
+            Environment.SetEnvironmentVariable("JAVA_HOME", installPath + "/Java");
+            REngine.SetEnvironmentVariables(installPath + "/R/bin/x64", installPath + "/R");
+            engine=REngine.GetInstance();
         }
         [DllImport(@"C:\Windows\System32\User32.dll", CharSet = CharSet.Auto)]
         public static extern int GetWindowThreadProcessId(IntPtr hwnd, out int ID);
@@ -123,7 +140,7 @@ namespace PrimerDimerTool
                 return;
             }
             Directory.CreateDirectory(tmp_path);
-            string primer3path = getConfigSetting("primer3dir");
+            string primer3path = installPath + "/Primer3";
             string isDeleteTempDir = getConfigSetting("deleteTempDir");
             string nProcess = getConfigSetting("processNum");
 
